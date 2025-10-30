@@ -1,0 +1,87 @@
+from flask import Flask, render_template_string
+import qrcode
+import webbrowser
+import threading
+import time
+import socket
+
+# 初始化Flask应用
+app = Flask(__name__)
+
+# 自动获取本地局域网IP（无需手动查询，PyCharm中直接生效）
+def get_local_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+    finally:
+        s.close()
+    return ip
+
+# 自定义配置（只需改display_text）
+CONFIG = {
+    "display_text": "PyCharm专属二维码文本展示\n支持多行文本\n可自由修改内容～",
+    "local_ip": get_local_ip(),  # 自动获取IP，无需手动改
+    "port": 5000
+}
+
+# 响应式UI模板（适配微信）
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文本展示</title>
+    <style>
+        body { margin: 20px; padding: 0; font-family: "微软雅黑", sans-serif; background: #f5f5f5; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .text-content { line-height: 1.8; font-size: 18px; color: #333; white-space: pre-line; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="text-content">{{ text }}</div>
+    </div>
+</body>
+</html>
+"""
+
+@app.route('/')
+def show_text():
+    return render_template_string(HTML_TEMPLATE, text=CONFIG["display_text"])
+
+def generate_qrcode():
+    url = f"http://{CONFIG['local_ip']}:{CONFIG['port']}"
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    img.save("text_display_qrcode.png")
+    print(f"✅ 二维码已保存到项目根目录：text_display_qrcode.png")
+    print(f"🌐 服务地址：{url}")
+    print(f"📱 微信扫描二维码即可查看（手机和电脑连同一WiFi）")
+
+def run_server():
+    app.run(host=CONFIG["local_ip"], port=CONFIG["port"], debug=False, use_reloader=False)
+
+if __name__ == "__main__":
+    print(f"🔍 自动获取本地IP：{CONFIG['local_ip']}")
+    generate_qrcode()
+    
+    # 启动后台服务
+    server_thread = threading.Thread(target=run_server)
+    server_thread.daemon = True
+    server_thread.start()
+    print(f"🚀 Flask服务已启动")
+    
+    # 自动打开二维码（PyCharm中直接预览）
+    time.sleep(1)
+    webbrowser.open("text_display_qrcode.png")
+    
+    input("⏹️  按Enter键停止服务...\n")
